@@ -2,14 +2,12 @@
 	'use strict';
 
 	const ENTER_KEY = 13;
-
-	// Your starting point. Enjoy the ride!
 	const {dom, informer, isBool} = rot;
 	const {query, queryAll, queryEach, li, div, input, label, button} = dom;
 
 	const RouteHandles = new Map();
 	informer.fromEvent(root, 'hashchange').on(() => RouteHandles.forEach((route_informer, hash) => location.hash === hash && route_informer.inform()));
-	const route = (hash,fn) => {
+	const route = (hash, fn) => {
 		const ri = (RouteHandles.has(hash) ? RouteHandles : RouteHandles.set(hash, informer())).get(hash);
 		if(location.hash === hash) fn();
 		return ri.on(fn);
@@ -40,10 +38,8 @@
 		});
 	}
 
-	const State = root.State = Store('todo-list');
-
+	const State = Store('todo-list');
 	if(!rot.isArr(State.todoItems)) State.todoItems = [];
-	console.log(...State.todoItems);
 
 	const toggleAll = query('input.toggle-all');
 	const todoCount = query('span.todo-count');
@@ -222,5 +218,4 @@ function make_todo_item(state, msg, value) {
 	route('#/active', showUncompleted);
 	route('#/', showAll);
 
-	root.todo = todo;
 })(window);
