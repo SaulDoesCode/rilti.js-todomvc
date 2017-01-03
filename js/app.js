@@ -52,6 +52,9 @@
 
 	const todo = {
 		items : new Set(),
+		each(fn) {
+			this.items.forEach(fn);
+		},
 		get count() {
 			return this.items.size;
 		},
@@ -80,7 +83,7 @@
 		}
 	}
 
-function make_todo_item(state, msg, value) {
+const create_todo = (state, msg, value) => {
 	msg = msg.trim();
 	if(!value) value = msg;
 
@@ -107,7 +110,7 @@ function make_todo_item(state, msg, value) {
 
 		todo.items.add(base);
 
-		const itemmsg = label({
+		const tlabel = label({
 			on: {
 				dblclick() {
 					dom.once(root, 'click', e => {
@@ -124,7 +127,7 @@ function make_todo_item(state, msg, value) {
 				save() {
 					let val = this.node.value.trim();
 					if(val != '' && val != msg) {
-						itemmsg.inner(msg = val);
+						tlabel.inner(msg = val);
 						base.removeClass('editing');
 						todo.save(state, msg);
 					}
@@ -161,7 +164,7 @@ function make_todo_item(state, msg, value) {
 		todo.save(state, msg, value);
 		return base.append(div({class: 'view'},
 			toggle,
-			itemmsg,
+			tlabel,
 			button({
 				class:'destroy',
 				on: {
@@ -175,7 +178,7 @@ function make_todo_item(state, msg, value) {
 		on : {
 			keydown(e) {
 				if(e.keyCode === ENTER_KEY) {
-					make_todo_item(false, this.value);
+					create_todo(false, this.value);
 					this.value = '';
 				}
 			}
@@ -185,17 +188,14 @@ function make_todo_item(state, msg, value) {
 	dom(toggleAll, {
 		on : {
 			change() {
-				todo.items.forEach(item => item.toggle(this.checked));
+				todo.each(item => item.toggle(this.checked));
 			}
 		}
 	});
 
-	State.todoItems.forEach(item => {
-		const {state, msg, value} = item;
-		make_todo_item(state, msg, value);
-	});
+	State.todoItems.forEach(item => create_todo(item.state, item.msg, item.value));
 
-	dom.on('.clear-completed', 'click', () => todo.items.forEach(item => {
+	dom.on('.clear-completed', 'click', () => todo.each(item => {
 		if(item.state) item.remove();
 	}));
 
