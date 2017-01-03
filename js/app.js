@@ -2,7 +2,9 @@
 	'use strict';
 
 	const ENTER_KEY = 13;
-	const {dom, informer, isBool} = rot, {query, queryAll, queryEach, li, div, input, label, button} = dom;
+
+	const {dom, informer} = rot,
+	{query, queryAll, queryEach, li, div, input, label, button} = dom;
 
 	const RouteHandles = new Map();
 	informer.fromEvent(root, 'hashchange').on(() => RouteHandles.forEach((route_informer, hash) => location.hash === hash && route_informer.inform()));
@@ -40,17 +42,16 @@
 	const State = Store('todo-list');
 	if(!rot.isArr(State.todoItems)) State.todoItems = [];
 
-	const toggleAll = query('input.toggle-all');
-	const todoCount = query('span.todo-count');
 	const todolist = query('ul.todo-list');
-	const footer = dom(query('.todoapp > .footer'));
+	const footer = dom(query('.todoapp > .footer')),
+	todoCount = query('span.todo-count');
 	const UpdateCounter = () => {
 		const num = todo.uncompleted;
 		footer.toggleClass('hidden', todo.count == 0);
 		todoCount.innerHTML = `<strong>${num}</strong> item${num != 1 ? 's' : ''} left`;
 	}
 
-	const todo = {
+	const todo = root.todo = {
 		items : new Set(),
 		each(fn) {
 			this.items.forEach(fn);
@@ -64,9 +65,9 @@
 		},
 		save(state, msg, value) {
 			if(State.todoItems.every(item => item.msg != msg)) {
-				const representation = {state, msg};
-				if(msg != value) representation.value = value;
-				State.todoItems = State.todoItems.filter(item => !!item).concat([representation]);
+				const item_model = {state, msg};
+				if(msg != value) item_model.value = value;
+				State.todoItems = State.todoItems.filter(item => !!item).concat([item_model]);
 			}
 			UpdateCounter();
 		},
@@ -80,112 +81,113 @@
 		delete(msg) {
 			State.todoItems = State.todoItems.filter(item => !!item && item.msg !== msg);
 			UpdateCounter();
+		},
+		create(state, msg, value) {
+			msg = msg.trim();
+			if(!value) value = msg;
+
+				const base = li({
+					props : {
+						set state(newState) {
+							this.toggleClass('completed', newState);
+							if(newState) todo.completed += 1;
+							else if(todo.completed > 0) todo.completed -= 1;
+							todo.saveState(msg, (state = newState));
+						},
+						get state() {
+							return state;
+						}
+					},
+					lifecycle: {
+						destroy(m) {
+							if(m.state) todo.completed -= 1;
+							todo.items.delete(m);
+							todo.delete(msg);
+						}
+					}
+				});
+
+				const tlabel = label({
+					on: {
+						dblclick() {
+							dom.once(root, 'click', e => {
+								if(e.target != editor) base.removeClass('editing');
+							});
+							base.addClass('editing');
+							editor.node.focus();
+						}
+					}
+				}, msg);
+
+				const editor = input({
+					props : {
+						save() {
+							let val = this.node.value.trim();
+							if(val != '' && val != msg) {
+								tlabel.inner(msg = val);
+								base.removeClass('editing');
+								todo.save(state, msg);
+							}
+							return this;
+						}
+					},
+					class:'edit',
+					value,
+					on: {
+						keydown(e, m) {
+							if(e.keyCode === ENTER_KEY) m.save();
+						}
+					}
+				});
+
+				const toggle = input({
+					class:'toggle',
+					type:'checkbox',
+					lifecycle : {
+						mount(m, el) {
+							if(state) base.state = el.checked = state;
+							base.toggle = (newState = !el.checked) => {
+								if(newState != base.state) base.state = el.checked = newState;
+							}
+						}
+					},
+					on : {
+						change() {
+							base.state = this.checked;
+						}
+					}
+				});
+
+				todo.save(state, msg, value);
+				base.append(
+					div({class: 'view'},
+						toggle,
+						tlabel,
+						button({
+							class:'destroy',
+							on: {
+								click: base.remove
+							}
+						})
+					),
+					editor
+				);
+				todo.items.add(base);
 		}
 	}
-
-const create_todo = (state, msg, value) => {
-	msg = msg.trim();
-	if(!value) value = msg;
-
-		const base = li({
-			props : {
-				set state(newState) {
-					this.toggleClass('completed', newState);
-					if(newState) todo.completed += 1;
-					else if(todo.completed > 0) todo.completed -= 1;
-					todo.saveState(msg, (state = newState));
-				},
-				get state() {
-					return state;
-				}
-			},
-			lifecycle: {
-				destroy(m) {
-					if(m.state) todo.completed -= 1;
-					todo.items.delete(m);
-					todo.delete(msg);
-				}
-			}
-		});
-
-		todo.items.add(base);
-
-		const tlabel = label({
-			on: {
-				dblclick() {
-					dom.once(root, 'click', e => {
-						if(e.target != editor) base.removeClass('editing');
-					});
-					base.addClass('editing');
-					editor.node.focus();
-				}
-			}
-		}, msg);
-
-		const editor = input({
-			props : {
-				save() {
-					let val = this.node.value.trim();
-					if(val != '' && val != msg) {
-						tlabel.inner(msg = val);
-						base.removeClass('editing');
-						todo.save(state, msg);
-					}
-					return this;
-				}
-			},
-			class:'edit',
-			value,
-			on: {
-				keydown(e, m) {
-					if(e.keyCode === ENTER_KEY) m.save();
-				}
-			}
-		});
-
-		const toggle = input({
-			class:'toggle',
-			type:'checkbox',
-			lifecycle : {
-				mount(m, el) {
-					if(state) base.state = el.checked = state;
-					base.toggle = (newState = !el.checked) => {
-						if(newState != base.state) base.state = el.checked = newState;
-					}
-				}
-			},
-			on : {
-				change() {
-					base.state = this.checked;
-				}
-			}
-		});
-
-		todo.save(state, msg, value);
-		return base.append(div({class: 'view'},
-			toggle,
-			tlabel,
-			button({
-				class:'destroy',
-				on: {
-					click: base.remove
-				}
-			})
-		), editor).appendTo(todolist);
-}
 
 	dom(query('input.new-todo'), {
 		on : {
 			keydown(e) {
 				if(e.keyCode === ENTER_KEY) {
-					create_todo(false, this.value);
+					todo.create(false, this.value);
 					this.value = '';
 				}
 			}
 		}
 	});
 
-	dom(toggleAll, {
+	dom(query('input.toggle-all'), {
 		on : {
 			change() {
 				todo.each(item => item.toggle(this.checked));
@@ -193,13 +195,16 @@ const create_todo = (state, msg, value) => {
 		}
 	});
 
-	State.todoItems.forEach(item => create_todo(item.state, item.msg, item.value));
+	State.todoItems.forEach(item => todo.create(item.state, item.msg, item.value));
 
 	dom.on('.clear-completed', 'click', () => todo.each(item => {
 		if(item.state) item.remove();
 	}));
 
-	const eachItem = fn => () => todo.items.forEach(fn);
+
+	rot.render(todo.items)(todolist);
+
+	const eachItem = fn => () => todo.each(fn);
 	const showCompleted = eachItem(item => item.toggleClass('hidden', !item.state));
 	const showUncompleted = eachItem(item => item.toggleClass('hidden', item.state));
 	const showAll = eachItem(item => item.removeClass('hidden'));
