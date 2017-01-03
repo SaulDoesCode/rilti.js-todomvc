@@ -42,16 +42,14 @@
 	const State = Store('todo-list');
 	if(!rot.isArr(State.todoItems)) State.todoItems = [];
 
-	const todolist = query('ul.todo-list');
-	const footer = dom(query('.todoapp > .footer')),
-	todoCount = query('span.todo-count');
+	const footer = dom(query('.todoapp > .footer')), todoCount = query('span.todo-count');
 	const UpdateCounter = () => {
 		const num = todo.uncompleted;
 		footer.toggleClass('hidden', todo.count == 0);
 		todoCount.innerHTML = `<strong>${num}</strong> item${num != 1 ? 's' : ''} left`;
 	}
 
-	const todo = root.todo = {
+	const todo = {
 		items : new Set(),
 		each(fn) {
 			this.items.forEach(fn);
@@ -195,14 +193,13 @@
 		}
 	});
 
-	State.todoItems.forEach(item => todo.create(item.state, item.msg, item.value));
-
 	dom.on('.clear-completed', 'click', () => todo.each(item => {
 		if(item.state) item.remove();
 	}));
 
+	State.todoItems.forEach(item => todo.create(item.state, item.msg, item.value));
 
-	rot.render(todo.items)(todolist);
+	rot.render(todo.items)('ul.todo-list');
 
 	const eachItem = fn => () => todo.each(fn);
 	const showCompleted = eachItem(item => item.toggleClass('hidden', !item.state));
