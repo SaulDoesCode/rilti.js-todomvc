@@ -42,6 +42,7 @@
 	const State = Store('todo-list');
 	if(!rot.isArr(State.todoItems)) State.todoItems = [];
 
+	const list = query('ul.todo-list');
 	const footer = dom(query('.todoapp > .footer')), todoCount = query('span.todo-count');
 	const UpdateCounter = () => {
 		const num = todo.uncompleted;
@@ -49,7 +50,7 @@
 		todoCount.innerHTML = `<strong>${num}</strong> item${num != 1 ? 's' : ''} left`;
 	}
 
-	const todo = {
+	const todo = window.todo = {
 		items : new Set(),
 		each(fn) {
 			this.items.forEach(fn);
@@ -156,7 +157,6 @@
 					}
 				});
 
-				todo.save(state, msg, value);
 				base.append(
 					div({class: 'view'},
 						toggle,
@@ -169,8 +169,10 @@
 						})
 					),
 					editor
-				);
+				).appendTo(list);
+
 				todo.items.add(base);
+				todo.save(state, msg, value);
 		}
 	}
 
@@ -198,8 +200,6 @@
 	}));
 
 	State.todoItems.forEach(item => todo.create(item.state, item.msg, item.value));
-
-	rot.render(todo.items)('ul.todo-list');
 
 	const eachItem = fn => () => todo.each(fn);
 	const showCompleted = eachItem(item => item.toggleClass('hidden', !item.state));
