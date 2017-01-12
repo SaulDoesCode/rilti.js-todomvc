@@ -3,8 +3,8 @@
 
 	const ENTER_KEY = 13;
 
-	const {dom, informer} = rot,
-	{query, queryAll, queryEach, li, div, input, label, button} = dom;
+	const {dom, informer} = rot;
+	const {query, queryAll, queryEach, li, div, input, label, button} = dom;
 
 	const RouteHandles = new Map();
 	informer.fromEvent(root, 'hashchange').on(() => RouteHandles.forEach((route_informer, hash) => location.hash === hash && route_informer.inform()));
@@ -42,15 +42,15 @@
 	const State = Store('todo-list');
 	if(!rot.isArr(State.todoItems)) State.todoItems = [];
 
-	const list = query('ul.todo-list');
-	const footer = dom(query('.todoapp > .footer')), todoCount = query('span.todo-count');
+	const list = dom('ul.todo-list');
+	const footer = dom('.todoapp > .footer'), todoCount = dom('span.todo-count');
 	const UpdateCounter = () => {
 		const num = todo.uncompleted;
-		footer.toggleClass('hidden', todo.count == 0);
-		todoCount.innerHTML = `<strong>${num}</strong> item${num != 1 ? 's' : ''} left`;
+		footer.class.toggle('hidden', todo.count == 0);
+		todoCount.html = `<strong>${num}</strong> item${num != 1 ? 's' : ''} left`;
 	}
 
-	const todo = window.todo = {
+	const todo = {
 		items : new Set(),
 		each(fn) {
 			this.items.forEach(fn);
@@ -88,7 +88,7 @@
 				const base = li({
 					props : {
 						set state(newState) {
-							this.toggleClass('completed', newState);
+							this.class.toggle('completed', newState);
 							if(newState) todo.completed += 1;
 							else if(todo.completed > 0) todo.completed -= 1;
 							todo.saveState(msg, (state = newState));
@@ -98,9 +98,9 @@
 						}
 					},
 					lifecycle: {
-						destroy(m) {
-							if(m.state) todo.completed -= 1;
-							todo.items.delete(m);
+						destroy(el) {
+							if(el.state) todo.completed -= 1;
+							todo.items.delete(el);
 							todo.delete(msg);
 						}
 					}
@@ -110,10 +110,10 @@
 					on: {
 						dblclick() {
 							dom.once(root, 'click', e => {
-								if(e.target != editor) base.removeClass('editing');
+								if(e.target != editor) delete base.class.editing;
 							});
-							base.addClass('editing');
-							editor.node.focus();
+							base.class = 'editing';
+							editor.focus();
 						}
 					}
 				}, msg);
@@ -124,7 +124,7 @@
 							let val = this.node.value.trim();
 							if(val != '' && val != msg) {
 								tlabel.inner(msg = val);
-								base.removeClass('editing');
+								delete base.class.editing;
 								todo.save(state, msg);
 							}
 							return this;
@@ -133,17 +133,19 @@
 					class:'edit',
 					value,
 					on: {
-						keydown(e, m) {
-							if(e.keyCode === ENTER_KEY) m.save();
+						keydown(e, el) {
+							if(e.keyCode === ENTER_KEY) el.save();
 						}
 					}
 				});
 
 				const toggle = input({
 					class:'toggle',
-					type:'checkbox',
+					attr : {
+						type:'checkbox'
+					},
 					lifecycle : {
-						mount(m, el) {
+						mount(el) {
 							if(state) base.state = el.checked = state;
 							base.toggle = (newState = !el.checked) => {
 								if(newState != base.state) base.state = el.checked = newState;
@@ -151,7 +153,7 @@
 						}
 					},
 					on : {
-						change() {
+						change(e) {
 							base.state = this.checked;
 						}
 					}
@@ -176,35 +178,25 @@
 		}
 	}
 
-	dom(query('input.new-todo'), {
-		on : {
-			keydown(e) {
-				if(e.keyCode === ENTER_KEY) {
-					todo.create(false, this.value);
-					this.value = '';
-				}
-			}
+	dom('input.new-todo').on.keydown = (e, el) => {
+		if(e.keyCode === ENTER_KEY) {
+			todo.create(false, el.value);
+			el.value = '';
 		}
-	});
+	}
 
-	dom(query('input.toggle-all'), {
-		on : {
-			change() {
-				todo.each(item => item.toggle(this.checked));
-			}
-		}
-	});
+	dom('input.toggle-all').on.change((e,el) => todo.each(item => item.toggle(el.checked)));
 
-	dom.on('.clear-completed', 'click', () => todo.each(item => {
+	dom('.clear-completed').on.click = () => todo.each(item => {
 		if(item.state) item.remove();
-	}));
+	});
 
 	State.todoItems.forEach(item => todo.create(item.state, item.msg, item.value));
 
 	const eachItem = fn => () => todo.each(fn);
-	const showCompleted = eachItem(item => item.toggleClass('hidden', !item.state));
-	const showUncompleted = eachItem(item => item.toggleClass('hidden', item.state));
-	const showAll = eachItem(item => item.removeClass('hidden'));
+	const showCompleted = eachItem(item => item.class.toggle('hidden', !item.state));
+	const showUncompleted = eachItem(item => item.class.toggle('hidden', item.state));
+	const showAll = eachItem(item => delete item.class.hidden);
 
 	route('#/completed', showCompleted);
 	route('#/active', showUncompleted);
