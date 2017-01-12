@@ -198,8 +198,27 @@
 	const showUncompleted = eachItem(item => item.class.toggle('hidden', item.state));
 	const showAll = eachItem(item => delete item.class.hidden);
 
-	route('#/completed', showCompleted);
-	route('#/active', showUncompleted);
-	route('#/', showAll);
+	const filters = new Set;
+	queryEach('ul.filters > li > a', filter => {
+		filters.add(dom(filter));
+	});
+	const activateFilter = route => {
+		filters.forEach(filter => {
+			filter.class.toggle('selected', filter.attr.href == route);
+		});
+	}
+
+	route('#/completed', () => {
+		showCompleted();
+		activateFilter('#/completed');
+	});
+	route('#/active', () => {
+		showUncompleted();
+		activateFilter('#/active');
+	});
+	route('#/', () => {
+		showAll();
+		activateFilter('#/');
+	});
 
 })(window);
