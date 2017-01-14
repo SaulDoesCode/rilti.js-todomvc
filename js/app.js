@@ -6,13 +6,17 @@
 	const {dom, informer} = rot;
 	const {query, queryAll, queryEach, li, div, input, label, button} = dom;
 
-	const RouteHandles = new Map();
-	informer.fromEvent(root, 'hashchange').on(() => RouteHandles.forEach((route_informer, hash) => location.hash === hash && route_informer.inform()));
+	const RouteHandles = new Map, HashChangeInf = informer.fromEvent(root, 'hashchange');
+	HashChangeInf.on(() => RouteHandles.forEach((route_informer, hash) => location.hash === hash && route_informer.inform()));
 	const route = (hash, fn) => {
 		const ri = (RouteHandles.has(hash) ? RouteHandles : RouteHandles.set(hash, informer())).get(hash);
 		if(location.hash === hash) fn();
 		return ri.on(fn);
 	}
+	route.default = fn => HashChangeInf.on(() => {
+		if(!RouteHandles.has(location.hash)) fn();
+	});
+
 
 	const Store = name => {
 			let val = localStorage.getItem(name);
@@ -39,7 +43,7 @@
 		});
 	}
 
-	const State = Store('todo-list');
+	const State = window.State = Store('todo-list');
 	if(!rot.isArr(State.todoItems)) State.todoItems = [];
 
 	const list = dom('ul.todo-list');
@@ -89,6 +93,8 @@
 					props : {
 						set state(newState) {
 							this.class.toggle('completed', newState);
+							if(location.hash.includes('completed') && !this.class.completed) this.class = 'hidden';
+							else delete this.class.hidden;
 							if(newState) todo.completed += 1;
 							else if(todo.completed > 0) todo.completed -= 1;
 							todo.saveState(msg, (state = newState));
@@ -110,7 +116,7 @@
 					on: {
 						dblclick() {
 							dom.once(root, 'click', e => {
-								if(e.target != editor) delete base.class.editing;
+								if(e.target != editor) base.class.remove = 'editing';
 							});
 							base.class = 'editing';
 							editor.focus();
@@ -121,10 +127,11 @@
 				const editor = input({
 					props : {
 						save() {
-							let val = this.node.value.trim();
+							let val = this.value.trim();
 							if(val != '' && val != msg) {
+								todo.delete(msg);
 								tlabel.inner(msg = val);
-								delete base.class.editing;
+								base.class.remove = 'editing';
 								todo.save(state, msg);
 							}
 							return this;
@@ -187,38 +194,28 @@
 
 	dom('input.toggle-all').on.change((e,el) => todo.each(item => item.toggle(el.checked)));
 
-	dom('.clear-completed').on.click = () => todo.each(item => {
-		if(item.state) item.remove();
-	});
+	dom('.clear-completed').on.click = () => todo.each(item => item.state && item.remove());
 
 	State.todoItems.forEach(item => todo.create(item.state, item.msg, item.value));
 
-	const eachItem = fn => () => todo.each(fn);
-	const showCompleted = eachItem(item => item.class.toggle('hidden', !item.state));
-	const showUncompleted = eachItem(item => item.class.toggle('hidden', item.state));
-	const showAll = eachItem(item => delete item.class.hidden);
-
 	const filters = new Set;
-	queryEach('ul.filters > li > a', filter => {
-		filters.add(dom(filter));
-	});
-	const activateFilter = route => {
+	queryEach('ul.filters > li > a', filter => filters.add(dom(filter)));
+
+	const eachItem = fn => () => {
+		todo.each(fn);
 		filters.forEach(filter => {
-			filter.class.toggle('selected', filter.attr.href == route);
+			filter.class.toggle('selected', filter.attr.href == location.hash);
 		});
 	}
 
-	route('#/completed', () => {
-		showCompleted();
-		activateFilter('#/completed');
-	});
-	route('#/active', () => {
-		showUncompleted();
-		activateFilter('#/active');
-	});
-	route('#/', () => {
-		showAll();
-		activateFilter('#/');
-	});
+	const showCompleted = eachItem(item => item.class.toggle('hidden', !item.state));
+	const showUncompleted = eachItem(item => item.class.toggle('hidden', item.state));
+	const showAll = eachItem(item => item.class.remove = 'hidden');
+
+
+
+	route('#/completed', showCompleted);
+	route('#/active', showUncompleted);
+	route.default(showAll);
 
 })(window);
