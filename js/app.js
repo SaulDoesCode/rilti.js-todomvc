@@ -17,7 +17,6 @@
 		if(!RouteHandles.has(location.hash)) fn();
 	});
 
-
 	const Store = name => {
 			let val = localStorage.getItem(name);
 			const store = rot.isStr(val) ? JSON.parse(val) : {}, inf = informer();
@@ -50,7 +49,7 @@
 	const footer = dom('.todoapp > .footer'), todoCount = dom('span.todo-count');
 	const UpdateCounter = () => {
 		const num = todo.uncompleted;
-		footer.class.toggle('hidden', todo.count == 0);
+		footer.class('hidden', todo.count == 0);
 		todoCount.html = `<strong>${num}</strong> item${num != 1 ? 's' : ''} left`;
 	}
 
@@ -92,7 +91,7 @@
 				const base = li({
 					props : {
 						set state(newState) {
-							this.class.toggle('completed', newState);
+							this.class('completed', newState);
 							if(location.hash.includes('completed') && !this.class.completed) this.class = 'hidden';
 							else delete this.class.hidden;
 							if(newState) todo.completed += 1;
@@ -116,7 +115,7 @@
 					on: {
 						dblclick() {
 							dom.once(root, 'click', e => {
-								if(e.target != editor) base.class.remove = 'editing';
+								if(e.target != editor) delete base.class.editing;
 							});
 							base.class = 'editing';
 							editor.focus();
@@ -160,8 +159,8 @@
 						}
 					},
 					on : {
-						change(e) {
-							base.state = this.checked;
+						change(e, el) {
+							base.state = el.checked;
 						}
 					}
 				});
@@ -203,16 +202,12 @@
 
 	const eachItem = fn => () => {
 		todo.each(fn);
-		filters.forEach(filter => {
-			filter.class.toggle('selected', filter.attr.href == location.hash);
-		});
+		filters.forEach(filter => filter.class('selected', filter.attr.href == location.hash));
 	}
 
-	const showCompleted = eachItem(item => item.class.toggle('hidden', !item.state));
-	const showUncompleted = eachItem(item => item.class.toggle('hidden', item.state));
-	const showAll = eachItem(item => item.class.remove = 'hidden');
-
-
+	const showCompleted = eachItem(item => item.class('hidden', !item.state)),
+				showUncompleted = eachItem(item => item.class('hidden', item.state)),
+				showAll = eachItem(item => item.class('hidden', false));
 
 	route('#/completed', showCompleted);
 	route('#/active', showUncompleted);
