@@ -3,40 +3,34 @@
 
 	const ENTER_KEY = 13;
 
-	const {dom, informer} = rot;
-	const {query, queryAll, queryEach, li, div, input, label, button} = dom;
+	const {dom, evtsys} = rot;
+	const {query, queryAll, queryEach, li, div, input, label, button, on} = dom;
 
-	const RouteHandles = new Map, HashChangeInf = informer.fromEvent(root, 'hashchange');
-	HashChangeInf.on(() => RouteHandles.forEach((route_informer, hash) => location.hash === hash && route_informer.inform()));
-	const route = (hash, fn) => {
-		const ri = (RouteHandles.has(hash) ? RouteHandles : RouteHandles.set(hash, informer())).get(hash);
-		if(location.hash === hash) fn();
-		return ri.on(fn);
-	}
-	route.default = fn => HashChangeInf.on(() => {
-		if(!RouteHandles.has(location.hash)) fn();
-	});
+	const router = evtsys();
+	on(root, 'hashchange', () => router.has(location.hash) ? router.emit(location.hash) : router.emit('default', location.hash));
+	const route = (hash, fn) => router.on(hash, fn);
+	route.default = fn => router.on('default', fn);
 
 	const Store = name => {
 			let val = localStorage.getItem(name);
-			const store = rot.isStr(val) ? JSON.parse(val) : {}, inf = informer();
+			const store = rot.isStr(val) ? JSON.parse(val) : {}, inf = evtsys();
 			return new Proxy(store, {
 						get(obj, key) {
 								if (key in inf) return inf[key];
-								inf.inform('get', key);
+								inf.emit('get', key);
 								return obj[key];
 						},
 						set(obj, key, val) {
 								if (val != obj[key]) {
 									obj[key] = val;
-									inf.inform('set', key, val);
+									inf.emit('set', key, val);
 									localStorage.setItem(name, JSON.stringify(obj));
 									return val;
 								}
 						},
 						deleteProperty(obj, key) {
 								delete obj[key];
-								inf.inform('delete', key);
+								inf.emit('delete', key);
 								localStorage.setItem(name, JSON.stringify(obj));
 						}
 		});
