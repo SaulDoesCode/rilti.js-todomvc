@@ -8,7 +8,10 @@
 
 	const router = evtsys();
 	on(root, 'hashchange', () => router.has(location.hash) ? router.emit(location.hash) : router.emit('default', location.hash));
-	const route = (hash, fn) => router.on(hash, fn);
+	const route = (hash, fn) => {
+	  if(location.hash == hash) fn();
+	  return router.on(hash, fn);
+	}
 	route.default = fn => router.on('default', fn);
 
 	const Store = name => {
