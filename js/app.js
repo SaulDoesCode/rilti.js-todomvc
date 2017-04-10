@@ -3,20 +3,11 @@
 
 	const ENTER_KEY = 13;
 
-	const {dom, evtsys} = rot;
+	const {dom, evtsys, route} = rot;
 	const {query, queryAll, queryEach, li, div, input, label, button, on} = dom;
 
-	const router = evtsys();
-	on(root, 'hashchange', () => router.has(location.hash) ? router.emit(location.hash) : router.emit('default', location.hash));
-	const route = (hash, fn) => {
-	  if(location.hash == hash) fn();
-	  return router.on(hash, fn);
-	}
-	route.default = fn => router.on('default', fn);
-
 	const Store = name => {
-			let val = localStorage.getItem(name);
-			const store = rot.isStr(val) ? JSON.parse(val) : {}, inf = evtsys();
+			const inf = evtsys(), store = JSON.parse(localStorage.getItem(name));
 			return new Proxy(store, {
 						get(obj, key) {
 								if (key in inf) return inf[key];
@@ -39,7 +30,7 @@
 		});
 	}
 
-	const State = window.State = Store('todo-list');
+	const State = Store('todo-list');
 	if(!rot.isArr(State.todoItems)) State.todoItems = [];
 
 	const list = dom('ul.todo-list');
@@ -127,7 +118,7 @@
 							if(val != '' && val != msg) {
 								todo.delete(msg);
 								tlabel.inner(msg = val);
-								base.class.remove = 'editing';
+								base.class('editing', false);
 								todo.save(state, msg);
 							}
 							return this;
@@ -168,9 +159,7 @@
 						tlabel,
 						button({
 							class:'destroy',
-							on: {
-								click: base.remove
-							}
+							on: { click: base.remove }
 						})
 					),
 					editor
@@ -188,7 +177,7 @@
 		}
 	}
 
-	dom('input.toggle-all').on.change((e,el) => todo.each(item => item.toggle(el.checked)));
+	dom('input.toggle-all').on.change = (e,el) => todo.each(item => item.toggle(el.checked));
 
 	dom('.clear-completed').on.click = () => todo.each(item => item.state && item.remove());
 
@@ -197,17 +186,14 @@
 	const filters = new Set;
 	queryEach('ul.filters > li > a', filter => filters.add(dom(filter)));
 
+	// filter-er
 	const eachItem = fn => () => {
 		todo.each(fn);
 		filters.forEach(filter => filter.class('selected', filter.attr.href == location.hash));
 	}
 
-	const showCompleted = eachItem(item => item.class('hidden', !item.state)),
-				showUncompleted = eachItem(item => item.class('hidden', item.state)),
-				showAll = eachItem(item => item.class('hidden', false));
-
-	route('#/completed', showCompleted);
-	route('#/active', showUncompleted);
-	route.default(showAll);
+	route('#/completed', eachItem(item => item.class('hidden', !item.state)));
+	route('#/active', eachItem(item => item.class('hidden', item.state)));
+	route(eachItem(item => item.class('hidden', false)));
 
 })(window);
