@@ -1,8 +1,8 @@
-(root => {
+{
 	'use strict';
 
-	const ENTER_KEY = 13;
-	const {dom, notifier, route} = rot, {queryEach, li, div, label, input, button, on, once} = dom;
+	const ENTER_KEY = 13,
+	{dom, notifier, route} = rot, {queryEach, li, div, label, input, button, on, once} = dom;
 
 	const Store = name => {
 		const inf = notifier(), store = JSON.parse(localStorage.getItem(name));
@@ -50,7 +50,7 @@
 			return this.items.size;
 		},
 		get uncompleted() {
-			return this.count - this.completed;
+			return this.items.size - this.completed;
 		},
 		save(state, msg, value) {
 			if (State.todoItems.every(item => item.msg != msg)) {
@@ -97,7 +97,7 @@
 			const tlabel = label({
 				on: {
 					dblclick() {
-						once(root, 'click', e => {
+						once(window, 'click', e => {
 							if (e.target != editor) delete base.class.editing;
 						});
 						base.class = 'editing';
@@ -122,9 +122,7 @@
 				class: 'edit',
 				value,
 				on: {
-					keydown(e, el) {
-						if (e.keyCode === ENTER_KEY) el.save();
-					}
+					keydown:(e, el) => e.keyCode === ENTER_KEY && el.save()
 				}
 			});
 
@@ -143,16 +141,13 @@
 			});
 
 			base.append(
-				div({class:'view'},
-					toggle,
-					tlabel,
-					button({class: 'destroy', on: {click: base.remove}})
-				),
+				div({class:'view'}, toggle, tlabel, button({class:'destroy', on:{click: base.remove}})),
 				editor
 			).appendTo(list);
 
 			todo.items.add(base);
 			todo.save(state, msg, value);
+			return {state, msg, value};
 		}
 	}
 
@@ -164,22 +159,20 @@
 	});
 
 	dom('input.toggle-all').on('change', (e, el) => todo.each(item => item.toggle(el.checked)));
-
 	dom('.clear-completed').on('click', () => todo.each(item => item.state && item.remove()));
 
-	State.todoItems.forEach(item => todo.create(item.state, item.msg, item.value));
+	State.todoItems = State.todoItems.map(item => todo.create(item.state, item.msg, item.value));
 
 	const filters = new Set;
 	queryEach('ul.filters > li > a', filter => filters.add(dom(filter)));
 
 	// filter-er
-	const eachItem = fn => () => {
-		todo.each(fn);
+	const filterer = state => () => {
+		todo.each(item => item.class('hidden', item.state == state));
 		filters.forEach(filter => filter.class('selected', filter.attr.href == location.hash));
 	}
 
-	route('#/completed', eachItem(item => item.class('hidden', !item.state)));
-	route('#/active', eachItem(item => item.class('hidden', item.state)));
-	route(eachItem(item => item.class ('hidden', false)));
-
-})(window);
+	route('#/completed', filterer(false));
+	route('#/active', filterer(true));
+	route(filterer(null));
+}
