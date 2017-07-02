@@ -132,16 +132,14 @@
 				lifecycle: {
 					mount(el) {
 						if (state) base.state = el.checked = state;
-						base.toggle = (newState = !el.checked) => {
-							if (newState != base.state) base.state = el.checked = newState;
-						}
+						base.toggle = (newState = !el.checked) => newState != base.state && (base.state = el.checked = newState);
 					}
 				},
 				on: {change:(e, el) => base.state = el.checked}
 			});
 
 			base.append(
-				div({class:'view'}, toggle, tlabel, button({class:'destroy', on:{click: base.remove}})),
+				div({class:'view'}, toggle, tlabel, button({class:'destroy', on:{click:base.remove}})),
 				editor
 			).appendTo(list);
 
@@ -151,15 +149,15 @@
 		}
 	}
 
-	dom('input.new-todo').on('keydown', (e, el) => {
+	dom('input.new-todo').on.keydown((e, el) => {
 		if (e.keyCode === ENTER_KEY) {
 			todo.create(false, el.value);
 			el.value = '';
 		}
 	});
 
-	dom('input.toggle-all').on('change', (e, el) => todo.each(item => item.toggle(el.checked)));
-	dom('.clear-completed').on('click', () => todo.each(item => item.state && item.remove()));
+	dom('input.toggle-all').on.change((e, el) => todo.each(item => item.toggle(el.checked)));
+	dom('.clear-completed').on.click(() => todo.each(item => item.state && item.remove()));
 
 	State.todoItems = State.todoItems.map(item => todo.create(item.state, item.msg, item.value));
 
