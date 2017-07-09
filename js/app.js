@@ -1,176 +1,128 @@
 {
 	'use strict';
+	 const {dom,notifier,route,isEmpty, each} = rot, {queryEach,html,li,div,label,input,button,on,once} = dom,
+	 ENTER = 13, isEnter = evt => evt.which == ENTER,
+	 json2map = str => new Map(JSON.parse(str)),
+	 map2json = map => JSON.stringify([...map].map(i => (i[1] = i[1].state,i))),
 
-	const ENTER_KEY = 13,
-	{dom, notifier, route} = rot, {queryEach, li, div, label, input, button, on, once} = dom;
+	 list = dom('ul.todo-list'), // for rendering
+	 toggleAll = dom('input.toggle-all'),
+	 footer = dom('.todoapp > .footer'),
+	 clearCompleted = footer.find('.clear-completed'),
+	 counterNodes = footer.find('.todo-count').childNodes, // no need to recreate the internal nodes each update
+	 todoItems = new Map;
+	 var App = notifier({
+		 get count() {
+			 return todoItems.size;
+		 },
+		 get uncompleted() {
+			 let count = 0;
+			 each(todoItems, item => !item.state && count++);
+			 return count;
+		 },
+		 counterUpdate() {
+			 footer.class('hidden', this.count < 1);
+			 clearCompleted.class('hidden', this.uncompleted == this.count);
+			 if(this.uncompleted == this.count) toggleAll.checked = false;
+			 else if(App.uncompleted < 1) toggleAll.checked = true;
+ 			 counterNodes[1].txt = ` item${(counterNodes[0].txt = this.uncompleted) != 1 ? 's' : ''} left`;
+		 },
+		 save() {
+			 localStorage.setItem('todos', map2json(todoItems));
+			 this.counterUpdate();
+		 },
+		 add(txt, state, todo) {
+			 todoItems.set(txt, {state, todo});
+			 this.save();
+		 },
+		 remove(txt) {
+			 todoItems.delete(txt);
+			 this.save();
+		 },
+		 update(oldTxt, txt, state, todo) {
+			 if(oldTxt && oldTxt != txt) todoItems.delete(oldTxt);
+			 todoItems.set(txt, {state, todo});
+			 todo.update();
+			 this.save();
+		 }
+	 });
 
-	const Store = name => {
-		const inf = notifier(), store = JSON.parse(localStorage.getItem(name));
-		return new Proxy(store || {}, {
-			get(obj, key) {
-				if (key in inf) return inf[key];
-				inf.emit('get:'+key);
-				return obj[key];
-			},
-			set(obj, key, val) {
-				if (val != obj[key]) {
-					obj[key] = val;
-					inf.emit('set:'+key, val);
-					localStorage.setItem(name, JSON.stringify(obj));
-					return val;
-				}
-			},
-			deleteProperty(obj, key) {
-				delete obj[key];
-				inf.emit('delete', key);
-				localStorage.setItem(name, JSON.stringify(obj));
-			}
-		});
-	}
+	 var Archetype = li(
+		 div({class:"view"},
+			 input({class: "toggle", type:"checkbox"}),
+			 label(), button({class: "destroy"})
+		 ),
+		 input({class: "edit"})
+	 );
 
-	const State = Store('todo-list');
-	if (!rot.isArr(State.todoItems)) State.todoItems = [];
+	 let activeEditor;
+	 const editDisruptListener = once(window, 'click', e => {
+		 if(!e.target.className.includes('edit') && activeEditor) activeEditor.editing(false);
+	 }).off();
 
-	const list = dom('ul.todo-list'), footer = dom('.todoapp > .footer'), todoCount = dom('span.todo-count');
+	 const newTodo = (state, txt) => {
+		 txt = txt.trim();
+		 if(isEmpty(txt)) return;
+		 const todo = Archetype.clone(),
+		 label = todo.find('label'),
+		 editor = todo.find('input.edit'),
+		 toggler = todo.find('input.toggle');
 
-	State.on('set:todoItems', () => {
-		footer.class('hidden', todo.count == 0);
-		let num = todo.uncompleted;
-		if(num < 0) num = 0;
-		todoCount.html = `<strong>${num}</strong> item${num != 1 ? 's': ''} left`;
-	});
+		 label.txt = editor.txt = txt;
+		 todo.update = () => {
+			 label.txt = txt;
+			 todo.class('completed', state);
+		 };
+		 todo.toggle = (newState = !toggler.checked) => App.update(null, txt, state = toggler.checked = newState, todo);
+		 editor.editing = isEditing => {
+			 todo.class('editing', isEditing);
+			 (activeEditor = editor)[isEditing ? 'focus' : 'blur']();
+			 editDisruptListener[isEditing ? 'once' : 'off']();
+			 if(!isEditing) {
+				 const newTxt = editor.txt.trim();
+				 if(!isEmpty(newTxt)) App.update(txt, txt = newTxt, state, todo);
+			 }
+		 }
+		 label.ondblclick = () => editor.editing(true);
+		 editor.onkeyup = e => isEnter(e) && editor.editing(false);
 
-	const todo = {
-		items: new Set,
-		completed: 0,
-		each(fn) {
-			this.items.forEach(fn);
-		},
-		get count() {
-			return this.items.size;
-		},
-		get uncompleted() {
-			return this.items.size - this.completed;
-		},
-		save(state, msg, value) {
-			if (State.todoItems.every(item => item.msg != msg)) {
-				const item_model = {state,msg};
-				if (msg != value) item_model.value = value;
-				State.todoItems = State.todoItems.filter(item => !!item).concat([item_model]);
-			}
-		},
-		saveState(msg, state) {
-			State.todoItems = State.todoItems.map(item => {
-				if (item.msg === msg) item.state = state;
-				return item;
-			});
-		},
-		delete(msg) {
-			State.todoItems = State.todoItems.filter(item => !!item && item.msg !== msg);
-		},
-		create(state, msg, value) {
-			msg = msg.trim();
-			if (!value) value = msg;
-			const base = li({
-				props: {
-					set state(newState) {
-						this.class('completed', newState);
-						if (location.hash.includes('completed') && !this.class.completed) this.class = 'hidden';
-						else delete this.class.hidden;
-						if (newState) todo.completed += 1;
-						else if (todo.completed > 0) todo.completed -= 1;
-						todo.saveState(msg, (state = newState));
-					},
-					get state() {
-						return state;
-					}
-				},
-				lifecycle: {
-					destroy(el) {
-						if (el.state) todo.completed -= 1;
-						todo.items.delete(el);
-						todo.delete(msg);
-					}
-				}
-			});
+		 if(state) {
+			 todo.class.completed = state;
+			 toggler.checked = state;
+		 }
 
-			const tlabel = label({
-				on: {
-					dblclick() {
-						once(window, 'click', e => {
-							if (e.target != editor) delete base.class.editing;
-						});
-						base.class = 'editing';
-						editor.focus();
-					}
-				}
-			}, msg);
+		 toggler.onchange = () => App.update(null, txt, state = toggler.checked, todo)
 
-			const editor = input({
-				props: {
-					save() {
-						let val = this.value.trim();
-						if (val != '' && val != msg) {
-							todo.delete(msg);
-							tlabel.inner(msg = val);
-							base.class('editing', false);
-							todo.save(state, msg);
-						}
-						return this;
-					}
-				},
-				class: 'edit',
-				value,
-				on: {
-					keydown:(e, el) => e.keyCode === ENTER_KEY && el.save()
-				}
-			});
+		 todo.data.on('destroy', () => App.remove(txt));
+		 todo.find('button.destroy').onclick = () => todo.remove();
 
-			const toggle = input({
-				class: 'toggle',
-				attr: {type: 'checkbox'},
-				lifecycle: {
-					mount(el) {
-						if (state) base.state = el.checked = state;
-						base.toggle = (newState = !el.checked) => newState != base.state && (base.state = el.checked = newState);
-					}
-				},
-				on: {change:(e, el) => base.state = el.checked}
-			});
+		 todo.appendTo(list);
+		 App.add(txt, state, todo);
+	 };
 
-			base.append(
-				div({class:'view'}, toggle, tlabel, button({class:'destroy', on:{click:base.remove}})),
-				editor
-			).appendTo(list);
-
-			todo.items.add(base);
-			todo.save(state, msg, value);
-			return {state, msg, value};
-		}
-	}
+	 const todoItemsJSON = localStorage.getItem('todos');
+	 if(todoItemsJSON) for (let [msg, state] of json2map(todoItemsJSON)) newTodo(state, msg);
+	 toggleAll.checked = App.uncompleted < 1;
 
 	dom('input.new-todo').on.keydown((e, el) => {
-		if (e.keyCode === ENTER_KEY) {
-			todo.create(false, el.value);
-			el.value = '';
+		if (isEnter(e)) {
+			newTodo(false, el.txt.trim());
+			el.txt = '';
 		}
 	});
 
-	dom('input.toggle-all').on.change((e, el) => todo.each(item => item.toggle(el.checked)));
-	dom('.clear-completed').on.click(() => todo.each(item => item.state && item.remove()));
+ 	toggleAll.on.change((e, el) => each(todoItems, item => item.todo.toggle(el.checked)));
+ 	clearCompleted.on.click(() => each(todoItems, item => item.state && item.todo.remove()));
 
-	State.todoItems = State.todoItems.map(item => todo.create(item.state, item.msg, item.value));
 
-	const filters = new Set;
+ 	const filters = new Set,
+ 	filterer = newState => () => {
+		each(todoItems, item => item.todo.class('hidden', item.state == newState));
+ 		filters.forEach(filter => filter.class('selected', filter.attr.href == location.hash));
+ 	}
 	queryEach('ul.filters > li > a', filter => filters.add(dom(filter)));
 
-	// filter-er
-	const filterer = state => () => {
-		todo.each(item => item.class('hidden', item.state == state));
-		filters.forEach(filter => filter.class('selected', filter.attr.href == location.hash));
-	}
-
-	route('#/completed', filterer(false));
-	route('#/active', filterer(true));
-	route(filterer(null));
+ 	route('#/completed', filterer(false));
+ 	route('#/active', filterer(true));
+ 	route(filterer(null));
 }
