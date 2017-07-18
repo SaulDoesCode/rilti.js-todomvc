@@ -1,128 +1,187 @@
 {
-	'use strict';
-	 const {dom,notifier,route,isEmpty, each} = rot, {queryEach,html,li,div,label,input,button,on,once} = dom,
-	 ENTER = 13, isEnter = evt => evt.which == ENTER,
-	 json2map = str => new Map(JSON.parse(str)),
-	 map2json = map => JSON.stringify([...map].map(i => (i[1] = i[1].state,i))),
+'use strict';
+// Getting all the functions needed
+const {dom,domfn,route,isEmpty,isStr,isBool,each,notifier,pipe,curry} = rilti,
+{queryAll,li,div,label,input,button,on,once} = dom, // dom contains shorthand querySelector, on, once and element creation stuff
+{Class, remove} = domfn, // domfn contains all the DOM manipulation functions
 
-	 list = dom('ul.todo-list'), // for rendering
-	 toggleAll = dom('input.toggle-all'),
-	 footer = dom('.todoapp > .footer'),
-	 clearCompleted = footer.find('.clear-completed'),
-	 counterNodes = footer.find('.todo-count').childNodes, // no need to recreate the internal nodes each update
-	 todoItems = new Map;
-	 var App = notifier({
-		 get count() {
-			 return todoItems.size;
-		 },
-		 get uncompleted() {
-			 let count = 0;
-			 each(todoItems, item => !item.state && count++);
-			 return count;
-		 },
-		 counterUpdate() {
-			 footer.class('hidden', this.count < 1);
-			 clearCompleted.class('hidden', this.uncompleted == this.count);
-			 if(this.uncompleted == this.count) toggleAll.checked = false;
-			 else if(App.uncompleted < 1) toggleAll.checked = true;
- 			 counterNodes[1].txt = ` item${(counterNodes[0].txt = this.uncompleted) != 1 ? 's' : ''} left`;
-		 },
-		 save() {
-			 localStorage.setItem('todos', map2json(todoItems));
-			 this.counterUpdate();
-		 },
-		 add(txt, state, todo) {
-			 todoItems.set(txt, {state, todo});
-			 this.save();
-		 },
-		 remove(txt) {
-			 todoItems.delete(txt);
-			 this.save();
-		 },
-		 update(oldTxt, txt, state, todo) {
-			 if(oldTxt && oldTxt != txt) todoItems.delete(oldTxt);
-			 todoItems.set(txt, {state, todo});
-			 todo.update();
-			 this.save();
-		 }
-	 });
+STORENAME = 'todos-rilti', ENTER = 13,
+isEnter = evt => evt.which == ENTER,
 
-	 var Archetype = li(
-		 div({class:"view"},
-			 input({class: "toggle", type:"checkbox"}),
-			 label(), button({class: "destroy"})
-		 ),
-		 input({class: "edit"})
-	 );
+// NODES for interaction
+list = dom('ul.todo-list'), // for faster rendering
+toggleAll = dom('input.toggle-all'),
+footer = dom('.todoapp > .footer'),
+clearCompleted = dom('.clear-completed', footer),
+counter = dom('.todo-count', footer),
+counters = counter.childNodes, // no need to recreate the internal nodes each update
 
-	 let activeEditor;
-	 const editDisruptListener = once(window, 'click', e => {
-		 if(!e.target.className.includes('edit') && activeEditor) activeEditor.editing(false);
-	 }).off();
+  items: new Map,
+  uncompleted:0,
+  get count() { return Todo.items.size }
+});
 
-	 const newTodo = (state, txt) => {
-		 txt = txt.trim();
-		 if(isEmpty(txt)) return;
-		 const todo = Archetype.clone(),
-		 label = todo.find('label'),
-		 editor = todo.find('input.edit'),
-		 toggler = todo.find('input.toggle');
+let visibility = '';
 
-		 label.txt = editor.txt = txt;
-		 todo.update = () => {
-			 label.txt = txt;
-			 todo.class('completed', state);
-		 };
-		 todo.toggle = (newState = !toggler.checked) => App.update(null, txt, state = toggler.checked = newState, todo);
-		 editor.editing = isEditing => {
-			 todo.class('editing', isEditing);
-			 (activeEditor = editor)[isEditing ? 'focus' : 'blur']();
-			 editDisruptListener[isEditing ? 'once' : 'off']();
-			 if(!isEditing) {
-				 const newTxt = editor.txt.trim();
-				 if(!isEmpty(newTxt)) App.update(txt, txt = newTxt, state, todo);
-			 }
-		 }
-		 label.ondblclick = () => editor.editing(true);
-		 editor.onkeyup = e => isEnter(e) && editor.editing(false);
+Todo.on('update', () => {
+  const todoArr = [];
+  let uncompleted = 0;
+  each(Todo.items, item => {
+    if(!item[1]) uncompleted++;
+    todoArr.push(item);
+  });
+  localStorage.setItem(STORENAME, JSON.stringify(todoArr));
+  toggleAll.checked = (Todo.uncompleted = uncompleted) < (Todo.count / 2);
+  Class(footer, 'hidden', Todo.count < 1);
+  Class(clearCompleted, 'hidden', visibility === 'active' || (!(visibility === 'active') && uncompleted === Todo.count));
+  counters[1].textContent = ` item${(counters[0].textContent = uncompleted) != 1 ? 's' : ''} left`;
+});
 
-		 if(state) {
-			 todo.class.completed = state;
-			 toggler.checked = state;
-		 }
+Todo.on('updateTodo', todo => {
+  Todo.items.set(todo, [todo.value, todo.state]);
+  todo.emit('post-update', todo.value, todo.state);
+  Todo.emit('update');
+});
 
-		 toggler.onchange = () => App.update(null, txt, state = toggler.checked, todo)
+Todo.on('deleteTodo', (todo, value, state) => {
+  Todo.items.delete(todo);
+  Todo.emit('update');
+});
 
-		 todo.data.on('destroy', () => App.remove(txt));
-		 todo.find('button.destroy').onclick = () => todo.remove();
+const canPass = (value, oldvalue) => {
+  let pass = !(isEmpty(value) || value == oldvalue);
+  each(Todo.items, item => {
+    if(item[0] === value) pass = false;
+  });
+  return pass;
+},
 
-		 todo.appendTo(list);
-		 App.add(txt, state, todo);
-	 };
+mutProp = curry((host, prop, state) => host[prop] = state), // for the illusion of functional code
 
-	 const todoItemsJSON = localStorage.getItem('todos');
-	 if(todoItemsJSON) for (let [msg, state] of json2map(todoItemsJSON)) newTodo(state, msg);
-	 toggleAll.checked = App.uncompleted < 1;
+shouldHide = state => (!state && visibility === 'done') || (state && visibility === 'active'),
 
-	dom('input.new-todo').on.keydown((e, el) => {
-		if (isEnter(e)) {
-			newTodo(false, el.txt.trim());
-			el.txt = '';
-		}
-	});
+newTodo = (value, state = false) => {
+ if(!canPass(value)) return;
+ const todo = notifier({
+   value, state,
+   toggle(newstate = !state) {
+     todo.emit('toggle', newstate).emit('update', newstate);
+   }
+ }),
+ when = todo.on, now = todo.emit; // I like shorthand everything, as you could probably tell.
 
- 	toggleAll.on.change((e, el) => each(todoItems, item => item.todo.toggle(el.checked)));
- 	clearCompleted.on.click(() => each(todoItems, item => item.state && item.todo.remove()));
+ when('update', val => {
+   if(isBool(val) && val !== todo.state) todo.state = val;
+   if(isStr(val) && canPass(val, todo.value)) todo.value = val;
+   Todo.emit('updateTodo', todo);
+ });
 
+ when('editing', (active, newval) => {
+   if(!active && canPass(newval)) {
+     now('update', newval);
+     now('editing', todo.editing = true);
+   }
+ });
 
- 	const filters = new Set,
- 	filterer = newState => () => {
-		each(todoItems, item => item.todo.class('hidden', item.state == newState));
- 		filters.forEach(filter => filter.class('selected', filter.attr.href == location.hash));
- 	}
-	queryEach('ul.filters > li > a', filter => filters.add(dom(filter)));
+ li({
+     render:list,
+     lifecycle: {
+       create(el) {
+          const mutPipe = pipe(el);
+          when('hidden', () => mutPipe(Class, 'hidden', shouldHide(todo.state)));
+          when('editing', active => mutPipe(Class, 'editing', active));
+          when('post-update', () => mutPipe
+            (Class, 'editing', !!todo.editing)
+            (Class, 'hidden', shouldHide(todo.state))
+            (Class, 'completed', todo.state)
+          );
+          when('delete', () => mutPipe(remove));
+          now('update');
+       }
+     }
+  },
 
- 	route('#/completed', filterer(false));
- 	route('#/active', filterer(true));
- 	route(filterer(null));
+  div({class:"view"},
+
+   input({
+     class: "toggle",
+     type: "checkbox",
+     checked:state,
+     lifecycle:{
+       create(el) { when('toggle', mutProp(el, 'checked')) }
+     },
+     on: {
+       change(e, el) { now('update', el.checked) }
+     }
+   }),
+
+   label({
+     on:{ dblclick() { now('editing', true) } },
+     lifecycle:{
+       create(el) { when('post-update', mutProp(el, 'textContent')) }
+     }
+   }, value),
+
+   button({
+     class: "destroy",
+     action() {
+       Todo.emit('deleteTodo', todo);
+       now('delete');
+     }
+   })
+
+  ),
+
+  input({
+    class: "edit",
+    value,
+    lifecycle:{
+      mount(el) {
+        when('editing', active => {
+          el[active ? 'focus' : 'blur']()
+          if(active) {
+            const focusLossListener = on(window, 'click', e => {
+              if(!e.target.isSameNode(el)) {
+                now('editing', false, el.value.trim());
+                focusLossListener.off();
+              }
+            }, { canCapture:false });
+          }
+        });
+      }
+    },
+    on: {
+      keyup(e, el) {
+        if(isEnter(e)) now('editing', false, el.value.trim());
+      }
+    }
+  })
+
+ );
+};
+
+each(JSON.parse(localStorage.getItem(STORENAME) || '[]'), item => newTodo(item[0], item[1]));
+
+on(toggleAll, 'change', () => {
+  const state = toggleAll.checked;
+  each(Todo.items, (_, todo) => todo.toggle(state));
+});
+
+on(clearCompleted, 'click', () => each(Todo.items, (item, todo) => todo.state && todo.emit('delete')));
+
+on('input.new-todo', 'keydown', (e, el) => {
+	if (isEnter(e)) {
+		newTodo(el.value.trim());
+		el.value = '';
+	}
+});
+
+const filters = queryAll('ul.filters > li > a');
+route(() => {
+  visibility = location.hash === '#/active' ? 'active' : location.hash === '#/completed' ? 'done' : '';
+  Class(clearCompleted, 'hidden', visibility === 'active');
+  Class(counter, 'hidden', visibility === 'done');
+  each(Todo.items, (item, todo) => todo.emit('hidden'));
+	each(filters, filter => Class(filter, 'selected', filter.href === location.hash));
+});
 }
