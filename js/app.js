@@ -3,7 +3,7 @@
 // Getting all the functions needed
 const {dom,domfn,route,isEmpty,isStr,isBool,each,notifier,pipe,curry} = rilti,
 {queryAll,li,div,label,input,button,on,once} = dom, // dom contains shorthand querySelector, on, once and element creation stuff
-{Class, remove} = domfn, // domfn contains all the DOM manipulation functions
+{Class, remove, attr} = domfn, // domfn contains all the DOM manipulation functions
 
 STORENAME = 'todos-rilti', ENTER = 13,
 isEnter = evt => evt.which == ENTER,
@@ -16,6 +16,7 @@ clearCompleted = dom('.clear-completed', footer),
 counter = dom('.todo-count', footer),
 counters = counter.childNodes, // no need to recreate the internal nodes each update
 
+Todo = notifier({ // centralized pub/sub event emitter
   items: new Map,
   uncompleted:0,
   get count() { return Todo.items.size }
@@ -182,6 +183,7 @@ route(() => {
   Class(clearCompleted, 'hidden', visibility === 'active');
   Class(counter, 'hidden', visibility === 'done');
   each(Todo.items, (item, todo) => todo.emit('hidden'));
-	each(filters, filter => Class(filter, 'selected', filter.href === location.hash));
+  each(filters, filter => Class(filter, 'selected', attr(filter, 'href') === location.hash));
 });
+if(!location.hash) location.hash = '#/'
 }
