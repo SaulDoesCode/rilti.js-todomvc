@@ -229,8 +229,10 @@ route(() => {
   each(Todo.items, (_, todo) => todo.emit('hidden'));
   each(filters, filter => Class(filter, 'selected', attr(filter, 'href') === location.hash));
 });
-
 if(!location.hash) location.hash = '#/';
-// yep, it is what it is.
+
+Class(footer, 'hidden', Todo.count < 1);
+
+// yep, that's it thanks for reading, and please tell people about rilti.js
 // spare a star for a poor south african developer? I beg of you kind sir/ma'am
 }
