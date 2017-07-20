@@ -171,19 +171,14 @@ newTodo = (value, state = false) => {
     value,
     lifecycle:{
       mount(el) {
-        // not sure if mess or good idea
-        const focusChecker = on(window, 'click', e => {
-          if(!e.target.isSameNode(el)) {
-            now('editing', false, el.value.trim());
-            focusChecker.off();
-          }
-        }, { canCapture:false }).off(); // on(...) is active by default so this just stops it
-        // rilti event listeners always return a manager rilti.dom.on(...) -> {off,on,once,reseat}
-        // it even has a reseat method that allows you to transfer or copy the listener to another target
+        const focusChecker = on(el, 'blur', () => now('editing', false, el.value.trim())).off();
+        // on(...) is active by default so .off just stops it
+        // rilti event listeners always return a manager object, rilti.dom.on(...) -> {off,on,once,reseat}
+        // they even have reseat methods which allows you to transfer or copy the listener to another target
 
         when('editing', active => { // I like the idea of meaningful/recursive/polymorphic event handles
           el[active ? 'focus' : 'blur']()
-          if(active) focusChecker.on();
+          focusChecker[active ? 'on' : 'off']();
         });
       }
     },
