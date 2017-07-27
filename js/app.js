@@ -3,19 +3,19 @@
 {
 'use strict';
 // Getting all the functions needed
-const {dom,domfn,route,isEmpty,isStr,isBool,each,notifier,pipe,curry} = rilti,
-{queryAll,li,div,label,input,button,on,once} = dom, // dom contains shorthand querySelector, on, once and element creation stuff
-{Class, remove, attr} = domfn, // domfn contains all the DOM manipulation functions
+const {dom,domfn,route,isEmpty,isStr,isBool,each,notifier,pipe,curry} = rilti;
+const {query,queryAll,li,div,label,input,button,on,once} = dom; // dom contains shorthand querySelector, on, once and element creation stuff
+const {Class,remove,attr} = domfn; // domfn contains all the DOM manipulation functions
 
 STORENAME = 'todos-rilti', ENTER = 13,
-isEnter = evt => evt.which == ENTER,
+isEnter = evt => evt.which == ENTER;
 
 // NODES for interaction
-list = dom('ul.todo-list'), // for faster rendering
-toggleAll = dom('input.toggle-all'),
-footer = dom('.todoapp > .footer'),
-clearCompleted = dom('.clear-completed', footer),
-counter = dom('.todo-count', footer),
+const list = query('ul.todo-list'), // for faster rendering
+toggleAll = query('input.toggle-all'),
+footer = query('.todoapp > .footer'),
+clearCompleted = query('.clear-completed', footer),
+counter = query('.todo-count', footer),
 counters = counter.childNodes, // no need to recreate the internal nodes each update
 
 Todo = notifier({ // centralized pub/sub event emitter and storage object
@@ -40,8 +40,8 @@ Todo.on('update', () => { // The Bridge
 
   toggleAll.checked = (Todo.uncompleted = uncompleted) < (Todo.count / 2); // switches half way instead of all or nothing
 
-  // don't want to attach methods and things to nodes or wrap them like Jquery
-  // manual first param style is simply and does the job
+  // don't want to attach methods to nodes or wrap them like Jquery
+  // manual first param style is simple and does the job
   // without copying methods onto nodes or wrapper objects, or *gasp* slow proxy object handles
   // yeah proxies for dom manipulation looks fun but it's just too slow and doesn't play well with old
   // browsers
